@@ -1,12 +1,13 @@
-
 import {
   Calendar,
   ChartBar,
   LayoutDashboard,
   Settings,
   User,
-  Menu
+  Package,
+  Users
 } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -23,32 +24,39 @@ import {
 const menuItems = [
   {
     title: "Dashboard",
-    url: "#dashboard",
+    url: "/",
     icon: LayoutDashboard,
   },
   {
     title: "Events",
-    url: "#events",
+    url: "/events",
     icon: Calendar,
   },
   {
-    title: "Analytics",
-    url: "#analytics",
-    icon: ChartBar,
+    title: "Inventory",
+    url: "/inventory",
+    icon: Package,
   },
   {
     title: "Users",
-    url: "#users",
-    icon: User,
+    url: "/users",
+    icon: Users,
+  },
+  {
+    title: "Analytics",
+    url: "/analytics",
+    icon: ChartBar,
   },
   {
     title: "Settings",
-    url: "#settings",
+    url: "/settings",
     icon: Settings,
   },
 ];
 
 export function AppSidebar() {
+  const location = useLocation();
+
   return (
     <Sidebar className="border-r border-border">
       <SidebarHeader className="border-b border-border p-6">
@@ -70,19 +78,24 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground"
-                  >
-                    <a href={item.url} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors">
-                      <item.icon className="w-5 h-5" />
-                      <span className="font-medium">{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems.map((item) => {
+                const isActive = location.pathname === item.url;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton 
+                      asChild 
+                      className={`hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                        isActive ? 'bg-primary text-primary-foreground' : ''
+                      }`}
+                    >
+                      <Link to={item.url} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors">
+                        <item.icon className="w-5 h-5" />
+                        <span className="font-medium">{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
