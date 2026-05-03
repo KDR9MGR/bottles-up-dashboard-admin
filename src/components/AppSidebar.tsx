@@ -7,6 +7,7 @@ import {
   Store,
   Building2,
   BookOpen,
+  Wine,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -29,6 +30,7 @@ const menuItems = [
   { title: "Clubs", url: "/clubs", icon: Building2 },
   { title: "Events", url: "/events", icon: Calendar },
   { title: "Bookings", url: "/bookings", icon: BookOpen },
+  { title: "Bottles", url: "/bottles", icon: Wine },
   { title: "Inventory", url: "/inventory", icon: Package },
 ];
 

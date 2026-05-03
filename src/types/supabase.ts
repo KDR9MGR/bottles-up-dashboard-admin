@@ -1,4 +1,6 @@
 // Matches actual Supabase schema for project hwmynlghrmtoufyrcihp
+// Last synced: 2026-05-03 — tables: profiles(36), vendors(35), clubs(4), events(18),
+//   clubs_bookings(5), vendor_inventory(5), bottles(34), categories(6), reviews(2)
 
 export interface Profile {
   id: string
@@ -170,6 +172,36 @@ export interface Review {
   rating: number | null
   comment: string | null
   is_verified: boolean | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface Bottle {
+  id: string
+  club_id: string | null
+  event_id: string | null
+  name: string
+  category: string | null
+  subcategory: string | null
+  brand: string | null
+  price: number
+  volume_ml: number | null
+  alcohol_content: number | null
+  description: string | null
+  image_url: string | null
+  is_available: boolean | null
+  is_featured: boolean | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface Category {
+  id: string
+  name: string
+  description: string | null
+  icon: string | null
+  color: string | null
+  is_active: boolean | null
   created_at: string | null
   updated_at: string | null
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import type {
   Profile, Vendor, Club, Event,
-  VendorInventory, EventsBooking, ClubsBooking, Review
+  VendorInventory, EventsBooking, ClubsBooking, Review, Bottle, Category
 } from '../types/supabase'
 
 function useSupabaseData<T>(tableName: string) {
@@ -67,16 +67,30 @@ export function useReviews() {
   return useSupabaseData<Review>('reviews')
 }
 
+export function useBottles() {
+  return useSupabaseData<Bottle>('bottles')
+}
+
+export function useCategories() {
+  return useSupabaseData<Category>('categories')
+}
+
 export function useDashboardStats() {
   const { count: totalUsers, loading: usersLoading, error: usersError } = useProfiles()
   const { count: totalVendors, loading: vendorsLoading, error: vendorsError } = useVendors()
   const { count: totalClubs, loading: clubsLoading, error: clubsError } = useClubs()
   const { count: totalEvents, loading: eventsLoading, error: eventsError } = useEvents()
   const { count: totalInventory, loading: inventoryLoading } = useVendorInventory()
-  const { count: totalClubBookings, loading: clubBookingsLoading } = useClubsBookings()
+  const { count: totalBottles, loading: bottlesLoading } = useBottles()
+  const { data: clubBookings, count: totalClubBookings, loading: clubBookingsLoading } = useClubsBookings()
   const { count: totalEventBookings, loading: eventBookingsLoading } = useEventsBookings()
 
-  const loading = usersLoading || vendorsLoading || clubsLoading || eventsLoading || inventoryLoading || clubBookingsLoading || eventBookingsLoading
+  const confirmedRevenue = clubBookings
+    .filter(b => b.payment_status === 'paid')
+    .reduce((sum, b) => sum + (b.total_amount ?? 0), 0)
+
+  const loading = usersLoading || vendorsLoading || clubsLoading || eventsLoading ||
+    inventoryLoading || bottlesLoading || clubBookingsLoading || eventBookingsLoading
   const error = usersError || vendorsError || clubsError || eventsError
 
   return {
@@ -86,7 +100,9 @@ export function useDashboardStats() {
       totalClubs,
       totalEvents,
       totalInventory,
+      totalBottles,
       totalBookings: totalClubBookings + totalEventBookings,
+      confirmedRevenue,
     },
     loading,
     error

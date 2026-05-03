@@ -9,6 +9,7 @@ import Events from "./pages/Events";
 import Vendors from "./pages/Vendors";
 import Clubs from "./pages/Clubs";
 import Bookings from "./pages/Bookings";
+import Bottles from "./pages/Bottles";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/vendors" element={<ProtectedRoute requireAdmin={true}><Vendors /></ProtectedRoute>} />
           <Route path="/clubs" element={<ProtectedRoute requireAdmin={true}><Clubs /></ProtectedRoute>} />
           <Route path="/bookings" element={<ProtectedRoute requireAdmin={true}><Bookings /></ProtectedRoute>} />
+          <Route path="/bottles" element={<ProtectedRoute requireAdmin={true}><Bottles /></ProtectedRoute>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

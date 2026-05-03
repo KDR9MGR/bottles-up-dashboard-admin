@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CalendarDays, Users, Building2, Store, AlertCircle, LogOut, User, Package, BookOpen } from "lucide-react"
+import { CalendarDays, Users, Building2, Store, AlertCircle, LogOut, User, Package, BookOpen, Wine, DollarSign } from "lucide-react"
 import { useDashboardStats } from "@/hooks/useSupabase"
 import { useAuth } from '../hooks/useAuth'
 import { Skeleton } from "@/components/ui/skeleton"
@@ -25,13 +25,18 @@ const Index = () => {
     )
   }
 
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount)
+
   const statCards = [
     { title: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-400', description: 'Registered user profiles' },
     { title: 'Total Vendors', value: stats.totalVendors, icon: Store, color: 'text-green-400', description: 'Active vendors on platform' },
     { title: 'Total Clubs', value: stats.totalClubs, icon: Building2, color: 'text-purple-400', description: 'Registered nightclubs' },
     { title: 'Total Events', value: stats.totalEvents, icon: CalendarDays, color: 'text-orange-400', description: 'Events created' },
     { title: 'Total Bookings', value: stats.totalBookings, icon: BookOpen, color: 'text-pink-400', description: 'Club & event bookings' },
+    { title: 'Bottles Listed', value: stats.totalBottles, icon: Wine, color: 'text-red-400', description: 'Premium bottles on menu' },
     { title: 'Inventory Items', value: stats.totalInventory, icon: Package, color: 'text-yellow-400', description: 'Vendor inventory items' },
+    { title: 'Confirmed Revenue', value: formatCurrency(stats.confirmedRevenue), icon: DollarSign, color: 'text-emerald-400', description: 'Paid booking revenue' },
   ]
 
   return (
@@ -70,7 +75,7 @@ const Index = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {statCards.map(({ title, value, icon: Icon, color, description }) => (
               <Card key={title} className="bg-card border border-border">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -79,7 +84,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-foreground">
-                    {loading ? <Skeleton className="h-8 w-16" /> : value.toLocaleString()}
+                    {loading ? <Skeleton className="h-8 w-16" /> : (typeof value === 'number' ? value.toLocaleString() : value)}
                   </div>
                   <CardDescription className="text-xs text-muted-foreground">{description}</CardDescription>
                 </CardContent>
