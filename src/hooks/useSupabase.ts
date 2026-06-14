@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import type {
   Profile, Vendor, Club, Event,
@@ -11,28 +11,29 @@ function useSupabaseData<T>(tableName: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const { data: result, error: fetchError, count: totalCount } = await supabase
-          .from(tableName)
-          .select('*', { count: 'exact' })
-        if (fetchError) throw fetchError
-        setData(result || [])
-        setCount(totalCount || 0)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-        console.error(`Error fetching ${tableName}:`, err)
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const { data: result, error: fetchError, count: totalCount } = await supabase
+        .from(tableName)
+        .select('*', { count: 'exact' })
+      if (fetchError) throw fetchError
+      setData(result || [])
+      setCount(totalCount || 0)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+      console.error(`Error fetching ${tableName}:`, err)
+    } finally {
+      setLoading(false)
     }
-    fetchData()
   }, [tableName])
 
-  return { data, count, loading, error }
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { data, count, loading, error, refetch: fetchData }
 }
 
 export function useProfiles() {
@@ -109,6 +110,78 @@ export function useDashboardStats() {
   }
 }
 
+export interface ChartDataPoint {
+  month: string
+  events: number
+  bookings: number
+}
+
+export function useEventChartData() {
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchChartData = async () => {
+      try {
+        const sixMonthsAgo = new Date()
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+        sixMonthsAgo.setDate(1)
+        sixMonthsAgo.setHours(0, 0, 0, 0)
+
+        const [eventsRes, bookingsRes] = await Promise.all([
+          supabase
+            .from('events')
+            .select('created_at')
+            .gte('created_at', sixMonthsAgo.toISOString()),
+          supabase
+            .from('events_bookings')
+            .select('booking_date, ticket_quantity')
+            .gte('booking_date', sixMonthsAgo.toISOString()),
+        ])
+
+        // Build a map for the last 6 calendar months
+        const now = new Date()
+        const months: ChartDataPoint[] = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+          return {
+            month: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+            events: 0,
+            bookings: 0,
+            _year: d.getFullYear(),
+            _month: d.getMonth(),
+          } as ChartDataPoint & { _year: number; _month: number }
+        })
+
+        const typed = months as (ChartDataPoint & { _year: number; _month: number })[]
+
+        ;(eventsRes.data ?? []).forEach(e => {
+          if (!e.created_at) return
+          const d = new Date(e.created_at)
+          const entry = typed.find(m => m._year === d.getFullYear() && m._month === d.getMonth())
+          if (entry) entry.events++
+        })
+
+        ;(bookingsRes.data ?? []).forEach(b => {
+          if (!b.booking_date) return
+          const d = new Date(b.booking_date)
+          const entry = typed.find(m => m._year === d.getFullYear() && m._month === d.getMonth())
+          if (entry) entry.bookings += b.ticket_quantity ?? 1
+        })
+
+        setChartData(typed.map(({ month, events, bookings }) => ({ month, events, bookings })))
+      } catch (err) {
+        console.error('Error fetching chart data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchChartData()
+  }, [])
+
+  return { chartData, loading }
+}
+
 export function useIsAdmin() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -141,4 +214,47 @@ export function useIsAdmin() {
   }, [])
 
   return { isAdmin, loading }
+}
+
+// Hook for fetching bookings belonging to a specific user
+export function useUserBookings(userId: string | null) {
+  const [clubBookings, setClubBookings] = useState<ClubsBooking[]>([])
+  const [eventBookings, setEventBookings] = useState<EventsBooking[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchBookings = useCallback(async (uid: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [clubRes, eventRes] = await Promise.all([
+        supabase.from('clubs_bookings').select('*').eq('user_id', uid).order('booking_date', { ascending: false }),
+        supabase.from('events_bookings').select('*').eq('user_id', uid).order('booking_date', { ascending: false }),
+      ])
+      if (clubRes.error) throw clubRes.error
+      if (eventRes.error) throw eventRes.error
+      setClubBookings(clubRes.data ?? [])
+      setEventBookings(eventRes.data ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load bookings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (userId) fetchBookings(userId)
+    else {
+      setClubBookings([])
+      setEventBookings([])
+    }
+  }, [userId, fetchBookings])
+
+  const totalSpend = useMemo(
+    () =>
+      [...clubBookings, ...eventBookings].reduce((s, b) => s + (b.total_amount ?? 0), 0),
+    [clubBookings, eventBookings]
+  )
+
+  return { clubBookings, eventBookings, loading, error, totalSpend }
 }

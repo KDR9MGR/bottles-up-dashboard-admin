@@ -1,81 +1,57 @@
-import React from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { Loader2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
   requireAdmin?: boolean
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
-  requireAdmin = false 
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  requireAdmin = false,
 }) => {
-  const { user, loading, isAdmin } = useAuth()
+  const { user, loading, isAdmin, signOut } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
-  // Show loading spinner while checking authentication
+  // Belt-and-suspenders: if a valid session somehow reaches the UI but the user
+  // is not an admin (e.g. role was revoked mid-session), sign them out immediately.
+  useEffect(() => {
+    if (!loading && user && requireAdmin && !isAdmin) {
+      signOut().then(() => {
+        navigate('/login', {
+          replace: true,
+          state: { error: 'Access denied: admin privileges required.' },
+        })
+      })
+    }
+  }, [loading, user, requireAdmin, isAdmin, signOut, navigate])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardContent className="flex flex-col items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-            <p className="text-gray-600">Loading...</p>
+            <p className="text-gray-600">Verifying access...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Redirect to login if not authenticated
   if (!user) {
-    return (
-      <Navigate 
-        to="/login" 
-        state={{ from: location }} 
-        replace 
-      />
-    )
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  // Check admin requirement
+  // Non-admin with active session: render nothing while the useEffect signs them out.
   if (requireAdmin && !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8">
-            <Alert variant="destructive">
-              <AlertDescription className="text-center">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold mb-2">Access Denied</h3>
-                  <p>You don't have admin privileges to access this page.</p>
-                </div>
-                <div className="space-y-2 text-sm">
-                  <p>Current user: {user.email}</p>
-                  <p>Admin access required for this dashboard.</p>
-                  <p className="mt-4">
-                    <a 
-                      href="mailto:support@bottlesup.com" 
-                      className="text-blue-600 hover:text-blue-500 underline"
-                    >
-                      Contact support
-                    </a>
-                    {' '}if you need admin access.
-                  </p>
-                </div>
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return null
   }
 
-  // Render protected content
   return <>{children}</>
 }
 

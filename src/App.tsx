@@ -11,7 +11,6 @@ import Clubs from "./pages/Clubs";
 import Bookings from "./pages/Bookings";
 import Bottles from "./pages/Bottles";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,9 +22,8 @@ const App = () => (
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
 
-          {/* Protected routes */}
+          {/* Protected admin-only routes */}
           <Route path="/" element={<ProtectedRoute requireAdmin={true}><Index /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute requireAdmin={true}><Users /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute requireAdmin={true}><Inventory /></ProtectedRoute>} />

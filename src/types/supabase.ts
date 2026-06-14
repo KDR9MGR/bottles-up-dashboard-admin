@@ -28,6 +28,19 @@ export interface Vendor {
   stripe_account_id: string | null
   onboarding_completed: boolean | null
   two_fa_enabled: boolean | null
+  /** 'active' | 'suspended' — managed by admin via approve/suspend actions */
+  status: string | null
+}
+
+export interface AdminAuditLog {
+  id: string
+  admin_id: string
+  action: string
+  target_table: string
+  target_id: string
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  created_at: string
 }
 
 export interface VendorDetail {

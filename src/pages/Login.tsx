@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,11 +17,17 @@ const Login: React.FC = () => {
   const { signIn, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const locationState = location.state as { from?: { pathname?: string } } | null
+
+  const locationState = location.state as { from?: { pathname?: string }; error?: string } | null
   const fromPath = locationState?.from?.pathname ?? '/'
 
   useEffect(() => {
-    // Redirect if already logged in
+    if (locationState?.error) {
+      setError(locationState.error)
+    }
+  }, [locationState?.error])
+
+  useEffect(() => {
     if (user) {
       navigate(fromPath, { replace: true })
     }
@@ -45,7 +51,7 @@ const Login: React.FC = () => {
       } else {
         navigate(fromPath, { replace: true })
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -59,12 +65,12 @@ const Login: React.FC = () => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Bottles Up</h1>
           <p className="text-gray-600">Admin Dashboard</p>
         </div>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Sign In</CardTitle>
             <CardDescription>
-              Enter your credentials to access the admin dashboard
+              Enter your admin credentials to access the dashboard
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -74,7 +80,7 @@ const Login: React.FC = () => {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -87,7 +93,7 @@ const Login: React.FC = () => {
                   disabled={loading}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -116,7 +122,7 @@ const Login: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              
+
               <Button
                 type="submit"
                 className="w-full"
@@ -132,22 +138,11 @@ const Login: React.FC = () => {
                 )}
               </Button>
             </form>
-            
-            <div className="mt-4 text-center text-sm">
-              <span className="text-gray-600">Don't have an account? </span>
-              <Link
-                to="/signup"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                Sign up
-              </Link>
-            </div>
           </CardContent>
         </Card>
-        
+
         <div className="text-center text-xs text-gray-500">
-          <p>Admin access required</p>
-          <p>Contact support if you need access</p>
+          <p>Admin access required. Contact your administrator to request access.</p>
         </div>
       </div>
     </div>

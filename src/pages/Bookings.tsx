@@ -1,51 +1,98 @@
-import { BookOpen, Building2, CalendarDays, DollarSign } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useClubsBookings, useEventsBookings } from "@/hooks/useSupabase";
+import { useState } from 'react'
+import { BookOpen, Building2, CalendarDays, DollarSign, RefreshCw, Flag } from 'lucide-react'
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/AppSidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useClubsBookings, useEventsBookings } from '@/hooks/useSupabase'
+import { useAdminActions } from '@/hooks/useAdminActions'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useToast } from '@/hooks/use-toast'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { ClubsBooking, EventsBooking } from '@/types/supabase'
+
+type RefundAction =
+  | { type: 'process'; bookingType: 'club'; booking: ClubsBooking }
+  | { type: 'process'; bookingType: 'event'; booking: EventsBooking }
+  | { type: 'flag'; bookingType: 'club'; booking: ClubsBooking }
+  | { type: 'flag'; bookingType: 'event'; booking: EventsBooking }
 
 const statusClass: Record<string, string> = {
   confirmed: 'bg-green-100 text-green-800 border-green-200',
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   cancelled: 'bg-red-100 text-red-800 border-red-200',
   completed: 'bg-blue-100 text-blue-800 border-blue-200',
-};
+  refunded: 'bg-purple-100 text-purple-800 border-purple-200',
+  flagged: 'bg-orange-100 text-orange-800 border-orange-200',
+}
 
 const StatusBadge = ({ status }: { status: string | null }) => {
-  const cls = statusClass[status?.toLowerCase() ?? ''] ?? '';
-  return <Badge variant="outline" className={`${cls} capitalize`}>{status || 'Unknown'}</Badge>;
-};
+  const cls = statusClass[status?.toLowerCase() ?? ''] ?? ''
+  return <Badge variant="outline" className={`${cls} capitalize`}>{status || 'Unknown'}</Badge>
+}
 
 const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '—';
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr));
-};
+  if (!dateStr) return '—'
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr))
+}
 
 const formatCurrency = (amount: number | null) => {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
+  if (amount == null) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+}
+
+const canRefund = (paymentStatus: string | null) =>
+  paymentStatus === 'paid'
+
+const canFlag = (paymentStatus: string | null) =>
+  paymentStatus === 'paid'
 
 const Bookings = () => {
-  const { data: clubBookings, loading: clubLoading, error: clubError } = useClubsBookings();
-  const { data: eventBookings, loading: eventLoading, error: eventError } = useEventsBookings();
+  const { data: clubBookings, loading: clubLoading, error: clubError, refetch: refetchClub } = useClubsBookings()
+  const { data: eventBookings, loading: eventLoading, error: eventError, refetch: refetchEvent } = useEventsBookings()
+  const { processRefund, flagRefund, loading: acting, error: actionError } = useAdminActions()
+  const { toast } = useToast()
+  const [pending, setPending] = useState<RefundAction | null>(null)
 
-  const loading = clubLoading || eventLoading;
-  const error = clubError || eventError;
+  const loading = clubLoading || eventLoading
+  const error = clubError || eventError
 
   const totalRevenue =
     clubBookings.reduce((s, b) => s + (b.total_amount ?? 0), 0) +
-    eventBookings.reduce((s, b) => s + (b.total_amount ?? 0), 0);
+    eventBookings.reduce((s, b) => s + (b.total_amount ?? 0), 0)
 
   const confirmedCount =
     clubBookings.filter(b => b.status === 'confirmed').length +
-    eventBookings.filter(b => b.status === 'confirmed').length;
+    eventBookings.filter(b => b.status === 'confirmed').length
+
+  const handleConfirm = async () => {
+    if (!pending) return
+    const { type, bookingType, booking } = pending
+    const isClub = bookingType === 'club'
+
+    let ok: boolean
+    if (type === 'process') {
+      ok = await processRefund(booking.id, bookingType)
+    } else {
+      ok = await flagRefund(booking.id, bookingType, booking.total_amount)
+    }
+
+    setPending(null)
+    if (ok) {
+      toast({
+        title: type === 'process' ? 'Refund processed' : 'Booking flagged',
+        description: `Booking ${booking.confirmation_code || booking.id.slice(0, 8)} has been ${type === 'process' ? 'refunded via Stripe' : 'flagged for review'}.`,
+      })
+      if (isClub) refetchClub(); else refetchEvent()
+    } else {
+      toast({ variant: 'destructive', title: 'Action failed', description: actionError ?? 'Unknown error' })
+    }
+  }
 
   if (error) {
     return (
@@ -57,8 +104,62 @@ const Bookings = () => {
           </main>
         </div>
       </SidebarProvider>
-    );
+    )
   }
+
+  const ClubActions = ({ b }: { b: ClubsBooking }) => (
+    <div className="flex items-center gap-1">
+      {canRefund(b.payment_status) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-purple-700 border-purple-300 hover:bg-purple-50"
+          onClick={() => setPending({ type: 'process', bookingType: 'club', booking: b })}
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Refund
+        </Button>
+      )}
+      {canFlag(b.payment_status) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-orange-700 border-orange-300 hover:bg-orange-50"
+          onClick={() => setPending({ type: 'flag', bookingType: 'club', booking: b })}
+        >
+          <Flag className="h-3 w-3 mr-1" />
+          Flag
+        </Button>
+      )}
+    </div>
+  )
+
+  const EventActions = ({ b }: { b: EventsBooking }) => (
+    <div className="flex items-center gap-1">
+      {canRefund(b.payment_status) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-purple-700 border-purple-300 hover:bg-purple-50"
+          onClick={() => setPending({ type: 'process', bookingType: 'event', booking: b })}
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Refund
+        </Button>
+      )}
+      {canFlag(b.payment_status) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-orange-700 border-orange-300 hover:bg-orange-50"
+          onClick={() => setPending({ type: 'flag', bookingType: 'event', booking: b })}
+        >
+          <Flag className="h-3 w-3 mr-1" />
+          Flag
+        </Button>
+      )}
+    </div>
+  )
 
   return (
     <SidebarProvider>
@@ -157,6 +258,7 @@ const Bookings = () => {
                           <TableHead className="text-muted-foreground">Amount</TableHead>
                           <TableHead className="text-muted-foreground">Payment</TableHead>
                           <TableHead className="text-muted-foreground">Status</TableHead>
+                          <TableHead className="text-muted-foreground">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -173,11 +275,12 @@ const Bookings = () => {
                             <TableCell className="text-sm text-foreground">{formatCurrency(b.total_amount)}</TableCell>
                             <TableCell><StatusBadge status={b.payment_status} /></TableCell>
                             <TableCell><StatusBadge status={b.status} /></TableCell>
+                            <TableCell><ClubActions b={b} /></TableCell>
                           </TableRow>
                         ))}
                         {clubBookings.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No club bookings found</TableCell>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No club bookings found</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -209,6 +312,7 @@ const Bookings = () => {
                           <TableHead className="text-muted-foreground">Payment</TableHead>
                           <TableHead className="text-muted-foreground">Check-in</TableHead>
                           <TableHead className="text-muted-foreground">Status</TableHead>
+                          <TableHead className="text-muted-foreground">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -225,11 +329,12 @@ const Bookings = () => {
                             <TableCell><StatusBadge status={b.payment_status} /></TableCell>
                             <TableCell className="text-sm text-foreground">{b.check_in_time ? formatDate(b.check_in_time) : '—'}</TableCell>
                             <TableCell><StatusBadge status={b.status} /></TableCell>
+                            <TableCell><EventActions b={b} /></TableCell>
                           </TableRow>
                         ))}
                         {eventBookings.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No event bookings found</TableCell>
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No event bookings found</TableCell>
                           </TableRow>
                         )}
                       </TableBody>
@@ -241,8 +346,25 @@ const Bookings = () => {
           </Tabs>
         </main>
       </div>
-    </SidebarProvider>
-  );
-};
 
-export default Bookings;
+      {pending && (
+        <ConfirmDialog
+          open={!!pending}
+          onOpenChange={open => { if (!open) setPending(null) }}
+          title={pending.type === 'process' ? 'Process Refund?' : 'Flag for Refund Review?'}
+          description={
+            pending.type === 'process'
+              ? `Refund ${formatCurrency(pending.booking.total_amount)} to ${pending.booking.contact_email || 'customer'} via Stripe? This cannot be undone.`
+              : `Flag booking ${pending.booking.confirmation_code || pending.booking.id.slice(0, 8)} for manual refund review? No money will be returned yet.`
+          }
+          confirmLabel={pending.type === 'process' ? 'Process Refund' : 'Flag for Review'}
+          variant={pending.type === 'process' ? 'destructive' : 'default'}
+          loading={acting}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </SidebarProvider>
+  )
+}
+
+export default Bookings

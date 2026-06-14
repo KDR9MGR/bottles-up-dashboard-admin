@@ -1,41 +1,45 @@
-import { Users as UsersIcon, UserCheck, Calendar, ShieldCheck } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { useProfiles } from "@/hooks/useSupabase";
+import { useState } from 'react'
+import { Users as UsersIcon, UserCheck, Calendar, ShieldCheck, BookOpen } from 'lucide-react'
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/AppSidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useProfiles } from '@/hooks/useSupabase'
+import { UserBookingsDialog } from '@/components/UserBookingsDialog'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from '@/components/ui/table'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import type { Profile } from '@/types/supabase'
 
 const Users = () => {
-  const { data: profiles, loading, error } = useProfiles();
+  const { data: profiles, loading, error } = useProfiles()
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—';
-    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr));
-  };
+    if (!dateStr) return '—'
+    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr))
+  }
 
   const getInitials = (name: string | null, email: string | null) => {
-    if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    if (email) return email[0].toUpperCase();
-    return '?';
-  };
+    if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    if (email) return email[0].toUpperCase()
+    return '?'
+  }
 
-  const now = new Date();
+  const now = new Date()
   const stats = {
     totalUsers: profiles.length,
     verifiedUsers: profiles.filter(p => p.verified).length,
     newUsersThisMonth: profiles.filter(p => {
-      if (!p.created_at) return false;
-      const d = new Date(p.created_at);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (!p.created_at) return false
+      const d = new Date(p.created_at)
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     }).length,
     adminUsers: profiles.filter(p => p.is_admin || p.role === 'admin').length,
-  };
+  }
 
   if (error) {
     return (
@@ -47,7 +51,7 @@ const Users = () => {
           </main>
         </div>
       </SidebarProvider>
-    );
+    )
   }
 
   return (
@@ -154,6 +158,7 @@ const Users = () => {
                       <TableHead className="text-muted-foreground">Role</TableHead>
                       <TableHead className="text-muted-foreground">Status</TableHead>
                       <TableHead className="text-muted-foreground">Joined</TableHead>
+                      <TableHead className="text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -187,11 +192,21 @@ const Users = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-foreground">{formatDate(profile.created_at)}</TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedUser(profile)}
+                          >
+                            <BookOpen className="h-3 w-3 mr-1" />
+                            Bookings
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {profiles.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -203,8 +218,14 @@ const Users = () => {
           </Card>
         </main>
       </div>
-    </SidebarProvider>
-  );
-};
 
-export default Users;
+      <UserBookingsDialog
+        userId={selectedUser?.id ?? null}
+        userName={selectedUser?.name ?? selectedUser?.email ?? null}
+        onClose={() => setSelectedUser(null)}
+      />
+    </SidebarProvider>
+  )
+}
+
+export default Users

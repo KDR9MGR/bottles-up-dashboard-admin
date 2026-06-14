@@ -1,13 +1,14 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { CalendarDays, Users, Building2, Store, AlertCircle, LogOut, User, Package, BookOpen, Wine, DollarSign } from "lucide-react"
-import { useDashboardStats } from "@/hooks/useSupabase"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { CalendarDays, Users, Building2, Store, AlertCircle, LogOut, User, Package, BookOpen, Wine, DollarSign } from 'lucide-react'
+import { useDashboardStats } from '@/hooks/useSupabase'
 import { useAuth } from '../hooks/useAuth'
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useState } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/AppSidebar"
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useState } from 'react'
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/AppSidebar'
+import { EventsChart } from '@/components/EventsChart'
 
 const Index = () => {
   const { stats, loading, error } = useDashboardStats()
@@ -91,6 +92,9 @@ const Index = () => {
               </Card>
             ))}
           </div>
+
+          {/* Charts — real data from the last 6 months */}
+          <EventsChart />
 
           {/* Overview Card */}
           <Card className="bg-card border border-border">

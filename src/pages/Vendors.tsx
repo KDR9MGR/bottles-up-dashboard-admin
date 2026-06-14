@@ -1,43 +1,69 @@
-import { Store, CheckCircle, XCircle, Clock } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useVendors } from "@/hooks/useSupabase";
+import { useState } from 'react'
+import { Store, CheckCircle, XCircle, Clock, ShieldOff, ShieldCheck } from 'lucide-react'
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/AppSidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useVendors } from '@/hooks/useSupabase'
+import { useAdminActions } from '@/hooks/useAdminActions'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useToast } from '@/hooks/use-toast'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from '@/components/ui/table'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import type { Vendor } from '@/types/supabase'
+
+type Action = { type: 'approve' | 'suspend'; vendor: Vendor }
 
 const Vendors = () => {
-  const { data: vendors, loading, error } = useVendors();
+  const { data: vendors, loading, error, refetch } = useVendors()
+  const { approveVendor, suspendVendor, loading: acting, error: actionError } = useAdminActions()
+  const { toast } = useToast()
+  const [pending, setPending] = useState<Action | null>(null)
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—';
-    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr));
-  };
+    if (!dateStr) return '—'
+    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr))
+  }
 
   const getInitials = (name: string | null, email: string) => {
-    if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    return email[0].toUpperCase();
-  };
+    if (name) return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    return email[0].toUpperCase()
+  }
 
   const getRoleBadge = (role: string | null) => {
     switch (role) {
-      case 'admin': return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Admin</Badge>;
-      case 'vendor': return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Vendor</Badge>;
-      case 'promoter': return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Promoter</Badge>;
-      default: return <Badge variant="secondary">{role || 'Unknown'}</Badge>;
+      case 'admin': return <Badge className="bg-purple-100 text-purple-800 border-purple-200">Admin</Badge>
+      case 'vendor': return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Vendor</Badge>
+      case 'promoter': return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Promoter</Badge>
+      default: return <Badge variant="secondary">{role || 'Unknown'}</Badge>
     }
-  };
+  }
 
   const stats = {
     total: vendors.length,
-    onboarded: vendors.filter(v => v.onboarding_completed).length,
+    active: vendors.filter(v => v.status !== 'suspended').length,
+    suspended: vendors.filter(v => v.status === 'suspended').length,
     withStripe: vendors.filter(v => v.stripe_account_id).length,
-    admins: vendors.filter(v => v.role === 'admin').length,
-  };
+  }
+
+  const handleConfirm = async () => {
+    if (!pending) return
+    const { type, vendor } = pending
+    const ok = type === 'approve'
+      ? await approveVendor(vendor.id, vendor.business_name)
+      : await suspendVendor(vendor.id, vendor.business_name)
+    setPending(null)
+    if (ok) {
+      toast({ title: type === 'approve' ? 'Vendor approved' : 'Vendor suspended', description: vendor.business_name ?? vendor.email })
+      refetch()
+    } else {
+      toast({ variant: 'destructive', title: 'Action failed', description: actionError ?? 'Unknown error' })
+    }
+  }
 
   if (error) {
     return (
@@ -49,7 +75,7 @@ const Vendors = () => {
           </main>
         </div>
       </SidebarProvider>
-    );
+    )
   }
 
   return (
@@ -88,22 +114,22 @@ const Vendors = () => {
                 </Card>
                 <Card className="bg-card border border-border">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Onboarded</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Active</CardTitle>
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-foreground">{stats.onboarded}</div>
-                    <p className="text-xs text-muted-foreground">Completed onboarding</p>
+                    <div className="text-2xl font-bold text-foreground">{stats.active}</div>
+                    <p className="text-xs text-muted-foreground">Currently active</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-card border border-border">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
-                    <Clock className="h-4 w-4 text-yellow-500" />
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Suspended</CardTitle>
+                    <Clock className="h-4 w-4 text-red-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-foreground">{stats.total - stats.onboarded}</div>
-                    <p className="text-xs text-muted-foreground">Awaiting onboarding</p>
+                    <div className="text-2xl font-bold text-foreground">{stats.suspended}</div>
+                    <p className="text-xs text-muted-foreground">Blocked by admin</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-card border border-border">
@@ -130,9 +156,7 @@ const Vendors = () => {
             <CardContent>
               {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
               ) : (
                 <Table>
@@ -145,6 +169,8 @@ const Vendors = () => {
                       <TableHead className="text-muted-foreground">Onboarding</TableHead>
                       <TableHead className="text-muted-foreground">Stripe</TableHead>
                       <TableHead className="text-muted-foreground">Joined</TableHead>
+                      <TableHead className="text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -178,13 +204,41 @@ const Vendors = () => {
                             : <Badge variant="outline">Not connected</Badge>}
                         </TableCell>
                         <TableCell className="text-sm text-foreground">{formatDate(vendor.created_at)}</TableCell>
+                        <TableCell>
+                          {vendor.status === 'suspended'
+                            ? <Badge className="bg-red-100 text-red-800">Suspended</Badge>
+                            : <Badge className="bg-green-100 text-green-800">Active</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          {vendor.role !== 'admin' && (
+                            vendor.status === 'suspended' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-700 border-green-300 hover:bg-green-50"
+                                onClick={() => setPending({ type: 'approve', vendor })}
+                              >
+                                <ShieldCheck className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => setPending({ type: 'suspend', vendor })}
+                              >
+                                <ShieldOff className="h-3 w-3 mr-1" />
+                                Suspend
+                              </Button>
+                            )
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {vendors.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                          No vendors found
-                        </TableCell>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No vendors found</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -194,8 +248,25 @@ const Vendors = () => {
           </Card>
         </main>
       </div>
-    </SidebarProvider>
-  );
-};
 
-export default Vendors;
+      {pending && (
+        <ConfirmDialog
+          open={!!pending}
+          onOpenChange={open => { if (!open) setPending(null) }}
+          title={pending.type === 'suspend' ? 'Suspend Vendor?' : 'Approve Vendor?'}
+          description={
+            pending.type === 'suspend'
+              ? `"${pending.vendor.business_name || pending.vendor.email}" will be suspended and lose platform access.`
+              : `"${pending.vendor.business_name || pending.vendor.email}" will be re-activated.`
+          }
+          confirmLabel={pending.type === 'suspend' ? 'Suspend' : 'Approve'}
+          variant={pending.type === 'suspend' ? 'destructive' : 'default'}
+          loading={acting}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </SidebarProvider>
+  )
+}
+
+export default Vendors

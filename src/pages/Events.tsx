@@ -1,44 +1,70 @@
-import { CalendarDays, Users, DollarSign, Star } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useEvents } from "@/hooks/useSupabase";
+import { useState } from 'react'
+import { CalendarDays, Users, DollarSign, Star, EyeOff, Trash2 } from 'lucide-react'
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/AppSidebar'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useEvents } from '@/hooks/useSupabase'
+import { useAdminActions } from '@/hooks/useAdminActions'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useToast } from '@/hooks/use-toast'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table'
+import type { Event } from '@/types/supabase'
+
+type Action = { type: 'unpublish' | 'remove'; event: Event }
 
 const Events = () => {
-  const { data: events, loading, error } = useEvents();
+  const { data: events, loading, error, refetch } = useEvents()
+  const { unpublishEvent, removeEvent, loading: acting, error: actionError } = useAdminActions()
+  const { toast } = useToast()
+  const [pending, setPending] = useState<Action | null>(null)
 
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—';
-    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr));
-  };
+    if (!dateStr) return '—'
+    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(dateStr))
+  }
 
   const formatCurrency = (amount: number | null) => {
-    if (amount == null) return '—';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-  };
+    if (amount == null) return '—'
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+  }
 
   const getStatusBadge = (status: string | null, isActive: boolean | null) => {
-    if (!isActive) return <Badge variant="outline" className="bg-gray-100 text-gray-700">Inactive</Badge>;
+    if (!isActive) return <Badge variant="outline" className="bg-gray-100 text-gray-700">Inactive</Badge>
     switch (status?.toLowerCase()) {
-      case 'active': return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
-      case 'cancelled': return <Badge className="bg-red-100 text-red-800 border-red-200">Cancelled</Badge>;
-      case 'completed': return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Completed</Badge>;
-      case 'draft': return <Badge variant="outline">Draft</Badge>;
-      default: return <Badge variant="secondary">{status || 'Unknown'}</Badge>;
+      case 'active': return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>
+      case 'cancelled': return <Badge className="bg-red-100 text-red-800 border-red-200">Cancelled</Badge>
+      case 'completed': return <Badge className="bg-blue-100 text-blue-800 border-blue-200">Completed</Badge>
+      case 'draft': return <Badge variant="outline">Draft</Badge>
+      default: return <Badge variant="secondary">{status || 'Unknown'}</Badge>
     }
-  };
+  }
 
   const stats = {
     total: events.length,
     active: events.filter(e => e.is_active && e.status === 'active').length,
     featured: events.filter(e => e.is_featured).length,
     totalRevenue: events.reduce((sum, e) => sum + (e.revenue ?? 0), 0),
-  };
+  }
+
+  const handleConfirm = async () => {
+    if (!pending) return
+    const { type, event } = pending
+    const ok = type === 'unpublish'
+      ? await unpublishEvent(event.id, event.name)
+      : await removeEvent(event.id, event.name)
+    setPending(null)
+    if (ok) {
+      toast({ title: type === 'unpublish' ? 'Event unpublished' : 'Event removed', description: event.name })
+      refetch()
+    } else {
+      toast({ variant: 'destructive', title: 'Action failed', description: actionError ?? 'Unknown error' })
+    }
+  }
 
   if (error) {
     return (
@@ -50,7 +76,7 @@ const Events = () => {
           </main>
         </div>
       </SidebarProvider>
-    );
+    )
   }
 
   return (
@@ -131,9 +157,7 @@ const Events = () => {
             <CardContent>
               {loading ? (
                 <div className="space-y-3">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
               ) : (
                 <Table>
@@ -147,6 +171,7 @@ const Events = () => {
                       <TableHead className="text-muted-foreground">Bookings</TableHead>
                       <TableHead className="text-muted-foreground">Revenue</TableHead>
                       <TableHead className="text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-muted-foreground">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -169,13 +194,37 @@ const Events = () => {
                         <TableCell className="text-sm text-foreground">{event.current_bookings ?? 0}</TableCell>
                         <TableCell className="text-sm text-foreground">{formatCurrency(event.revenue)}</TableCell>
                         <TableCell>{getStatusBadge(event.status, event.is_active)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {event.is_active && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-yellow-700 border-yellow-300 hover:bg-yellow-50"
+                                onClick={() => setPending({ type: 'unpublish', event })}
+                              >
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                Unpublish
+                              </Button>
+                            )}
+                            {event.status !== 'cancelled' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => setPending({ type: 'remove', event })}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {events.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                          No events found
-                        </TableCell>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No events found</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -185,8 +234,25 @@ const Events = () => {
           </Card>
         </main>
       </div>
-    </SidebarProvider>
-  );
-};
 
-export default Events;
+      {pending && (
+        <ConfirmDialog
+          open={!!pending}
+          onOpenChange={open => { if (!open) setPending(null) }}
+          title={pending.type === 'unpublish' ? 'Unpublish Event?' : 'Remove Event?'}
+          description={
+            pending.type === 'unpublish'
+              ? `"${pending.event.name}" will be hidden from users immediately. Existing bookings are unaffected.`
+              : `"${pending.event.name}" will be marked cancelled. Bookings are NOT automatically refunded — process those separately in Bookings.`
+          }
+          confirmLabel={pending.type === 'unpublish' ? 'Unpublish' : 'Remove'}
+          variant="destructive"
+          loading={acting}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </SidebarProvider>
+  )
+}
+
+export default Events
